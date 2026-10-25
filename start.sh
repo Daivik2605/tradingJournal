@@ -24,8 +24,9 @@ fi
 
 echo "Chart Journal running at $URL  (press Ctrl+C to stop)"
 ( sleep 1; if command -v open >/dev/null 2>&1; then open "$URL"; elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$URL"; fi ) >/dev/null 2>&1 &
+# serve.py = python's http.server plus "Cache-Control: no-store", so the browser never shows an old app.js (serve.json does the same for the npx fallback)
 if command -v python3 >/dev/null 2>&1; then
-  exec python3 -m http.server "$PORT" --bind 127.0.0.1
+  PORT="$PORT" exec python3 serve.py
 else
   exec npx --yes serve -l "$PORT" .
 fi

@@ -155,7 +155,7 @@ window.TJ_SEED = {
     { phase: 4, title: "Stop losses & risk/reward", detail: "Decide your exit before you enter. Aim for reward ≥ 2× risk." },
     { phase: 4, title: "Fees, spreads & slippage", detail: "The hidden costs that kill frequent trading." },
     { phase: 4, title: "Trading psychology", detail: "FOMO, revenge trading, overconfidence, and sticking to a plan." },
-    { phase: 4, title: "Paper trading", detail: "Practise with fake money until your results are consistent." },
+    { phase: 4, title: "Paper trading", detail: "Practise with fake money in TradingView Paper Trading or Bybit Demo, and journal the lesson here." },
     { phase: 4, title: "Trade journaling", detail: "Record entry, exit, reason and emotion for every trade. You're already practising this." },
     { phase: 4, title: "Backtesting a simple strategy", detail: "Test a rule on past data before trusting it." },
 

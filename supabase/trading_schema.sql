@@ -146,6 +146,59 @@ alter table public.trading_settings add column if not exists fee_pct         num
 alter table public.trading_settings add column if not exists funding_pct_8h  numeric default 0.01;    -- estimated futures funding per 8 hours
 alter table public.trading_settings add column if not exists timeframe_chips text[];                  -- null = the app's default list (15m … 1Y)
 
+-- ───────────── Additive upgrades (round 2, phase 5a): spot/futures, fees, currency. Safe to re-run; three check constraints are dropped and re-added at once ─────────────
+alter table public.trading_assets       add column if not exists coingecko_id text;                      -- optional override for live crypto prices (null = built-in id table)
+alter table public.trading_paper_trades add column if not exists mode            text not null default 'spot';   -- spot | futures (older trades are spot)
+alter table public.trading_paper_trades add column if not exists leverage        numeric;                       -- futures only, 1 to 50
+alter table public.trading_paper_trades add column if not exists maintenance_pct numeric;                       -- futures only, e.g. 0.5 (percent) used for the liquidation estimate
+alter table public.trading_paper_trades add column if not exists fee_pct         numeric;                       -- taker fee per side, percent, snapshot of the Settings default at open (null = no fees, older trades)
+alter table public.trading_paper_trades add column if not exists funding_pct_8h  numeric;                       -- funding estimate per 8 h, percent, snapshot at open
+alter table public.trading_paper_trades add column if not exists funding_est     numeric;                       -- estimated funding cost in the trade's currency, set when the trade closes
+alter table public.trading_paper_trades add column if not exists currency        text not null default 'USD';   -- prices on this trade are in this currency (ISO code)
+alter table public.trading_paper_trades add column if not exists fx_to_usd       numeric;                       -- USD per 1 unit of `currency`, stored when the trade closes (1 for USD)
+alter table public.trading_paper_trades add column if not exists net_pnl_usd     numeric;                       -- net result in USD (after fees and funding, loss capped at margin), set when the trade closes; null on older trades (they use gross P&L)
+alter table public.trading_paper_trades drop constraint if exists trading_paper_trades_mode_check;
+alter table public.trading_paper_trades add constraint trading_paper_trades_mode_check check (mode in ('spot','futures'));
+alter table public.trading_paper_trades drop constraint if exists trading_paper_trades_leverage_check;
+alter table public.trading_paper_trades add constraint trading_paper_trades_leverage_check check (leverage is null or leverage between 1 and 50);
+alter table public.trading_paper_trades drop constraint if exists trading_paper_trades_currency_check;
+alter table public.trading_paper_trades add constraint trading_paper_trades_currency_check check (currency ~ '^[A-Z]{3}$');
+
+-- ───────────── Additive upgrades (round 2, phase 5b): setup tag, observation link, checklist. Safe to re-run; nothing is dropped ─────────────
+alter table public.trading_paper_trades add column if not exists setup_tag       text;                           -- breakout, pullback, range… (list is editable in Settings)
+alter table public.trading_paper_trades add column if not exists observation_id  uuid references public.trading_observations(id) on delete set null;   -- the observation this trade came from, if any
+alter table public.trading_paper_trades add column if not exists checklist       jsonb;                          -- pre-trade ticks at open: {stop_set, risk_ok, rr_ok, htf_checked, liq_map_checked, reason_written, risk_pct, risk_limit_pct, rr}
+alter table public.trading_settings     add column if not exists setup_tags      text[];                         -- null = the app's default list
+create index if not exists trading_paper_trades_obs on public.trading_paper_trades (observation_id) where observation_id is not null;
+
+-- ───────────── Additive upgrades (round 2, phase 5c): edit log, timestamps, review, price range seen, descriptions. Safe to re-run; one check constraint is dropped and re-added at once ─────────────
+alter table public.trading_paper_trades add column if not exists edits         jsonb;            -- edit log: [{field, old, new, at}], oldest first
+alter table public.trading_paper_trades add column if not exists opened_at     timestamptz;      -- the moment the trade was opened (the date column opened_on stays)
+alter table public.trading_paper_trades add column if not exists closed_at     timestamptz;      -- the moment it was closed (null on open trades, and on trades closed before this column existed)
+alter table public.trading_paper_trades add column if not exists followed_plan boolean;          -- review at close: did you follow your plan?
+alter table public.trading_paper_trades add column if not exists mistakes      text[];           -- review at close: ticked mistakes
+alter table public.trading_paper_trades add column if not exists rating        int;              -- review at close: 1 to 5
+alter table public.trading_paper_trades add column if not exists mae_price     numeric;          -- worst live price seen against the trade while the app was open (long: lowest, short: highest)
+alter table public.trading_paper_trades add column if not exists mfe_price     numeric;          -- best live price seen in the trade's favour while the app was open
+alter table public.trading_paper_trades drop constraint if exists trading_paper_trades_rating_check;
+alter table public.trading_paper_trades add constraint trading_paper_trades_rating_check check (rating is null or rating between 1 and 5);
+alter table public.trading_settings     add column if not exists setup_tag_notes jsonb;          -- {tag: one-line description}; a missing tag uses the app's default text
+alter table public.trading_settings     add column if not exists trade_mistakes  text[];         -- null = the app's default list
+-- Existing trades: opened_at = the moment the row was saved (that is when they were opened). closed_at stays null on old trades.
+-- Safe to re-run: only rows where opened_at is still null are touched.
+update public.trading_paper_trades set opened_at = created_at where opened_at is null;
+
+-- ───────────── Focus mode (phase 5d): practice trades are frozen and hidden by default. Safe to re-run ─────────────
+alter table public.trading_settings add column if not exists show_practice boolean not null default false;   -- Settings → "Show practice trades"
+-- Learn: the old "Paper trading" row pushed fake-money practice here. Reword it only while it is still the original text (an edited row is left alone; re-running changes nothing).
+update public.trading_concepts
+   set detail = 'Practise with fake money in TradingView Paper Trading or Bybit Demo, and journal the lesson here.'
+ where title = 'Paper trading' and detail = 'Practise with fake money until your results are consistent.';
+
+-- ───────────── One-time data fix (phase 4b): confidence only means something next to a prediction ─────────────
+-- Older saves stored the slider's default (3) even with no guess. Safe to re-run: after the first run no row matches.
+update public.trading_observations set confidence = null where prediction is null and confidence is not null;
+
 -- ───────────── Row Level Security: each user only ever sees their own rows ─────────────
 do $$
 declare t text;
@@ -261,7 +314,8 @@ with t as (
   select user_id,
          count(*) filter (where exit_price is null)::int as open_n,
          coalesce(sum(case when exit_price is null then 0
-                           else (case when side = 'short' then entry_price - exit_price else exit_price - entry_price end) * quantity
+                           else coalesce(net_pnl_usd,   -- net USD set at close (phase 5a); older trades have none and use gross, which is what they always had
+                                         (case when side = 'short' then entry_price - exit_price else exit_price - entry_price end) * quantity)
                       end), 0) as pnl,
          max(created_at) as last_ts
   from public.trading_paper_trades group by 1

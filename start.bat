@@ -3,6 +3,7 @@ REM Starts Chart Journal at http://localhost:5173 (close this window to stop)
 REM Port 5173 is fixed in the PersonalOS registry; if it's taken we stop instead of picking another.
 cd /d "%~dp0"
 set PORT=5173
+REM serve.py = python http.server plus "Cache-Control: no-store" (serve.json does the same for the npx fallback)
 netstat -ano | findstr /R /C:":%PORT% .*LISTENING" >nul
 if %errorlevel%==0 (
   echo Chart Journal needs port %PORT%, but something is already using it.
@@ -15,12 +16,12 @@ echo Chart Journal running at http://localhost:%PORT%  (close this window to sto
 start "" http://localhost:%PORT%
 where py >nul 2>nul
 if %errorlevel%==0 (
-  py -m http.server %PORT% --bind 127.0.0.1
+  py serve.py
   goto :eof
 )
 where python >nul 2>nul
 if %errorlevel%==0 (
-  python -m http.server %PORT% --bind 127.0.0.1
+  python serve.py
   goto :eof
 )
 npx --yes serve -l %PORT% .

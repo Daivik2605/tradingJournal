@@ -4,15 +4,25 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Chart Journal</title>
+  <script>
+    (function () { try { var t = localStorage.getItem("tj:theme"); var d = t === "dark" || (t !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches); document.documentElement.setAttribute("data-theme", d ? "dark" : "light"); } catch (e) {} })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <script>
+    // One version for every script and stylesheet below: a changed number is a new URL, so a browser can't keep serving an old copy.
+    // The same number is shown in Settings. Bump it whenever a file changes (docs/BUILD_STATUS.md lists the current one).
+    window.APP_VERSION = "5c.2";
+    document.write('<link rel="stylesheet" href="styles.css?v=' + window.APP_VERSION + '">');
+  </script>
 </head>
 <body>
   <div id="app"><div class="center muted">Starting…</div></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="config.js"></script>
-  <script src="seed.js"></script>
-  <script src="app.js"></script>
+  <script>
+    ["jszip.min.js", "config.js", "seed.js", "prices.js", "trade.js", "stats.js", "tradeexport.js", "app.js"].forEach(function (f) {
+      document.write('<script src="' + f + '?v=' + window.APP_VERSION + '"><\/script>');
+    });
+  </script>
 </body>
 </html>
