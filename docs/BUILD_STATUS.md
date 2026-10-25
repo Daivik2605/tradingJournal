@@ -1,0 +1,54 @@
+# Chart Journal — build status
+
+_Last updated: 2026-10-24 (round 2, phase 4 built)_
+
+## Round 2 (`../../docs/prompts/05-chart-journal-round2.md`)
+- **Phase 1 done, awaiting your test:** pattern chips removed from the form; tabs are now Progress · Watchlist · Today · Learn · Practice trades + ⚙ Settings; Progress holds Overview / Journal / History sub-tabs (grading badge on the Progress tab and the History sub-tab); asset groups ordered US → Resources → Crypto → India → Other everywhere; daily-view streak carry-forward and `N opened` headline (see `DATA_CONTRACT.md`).
+- **Phase 2 done, awaiting your test:** 7 new assets (TSLA, SPCX, DJI, HYPE, BTC.D, ANTHROPIC, OPENAI) added to new and existing accounts; empty TradingView/Yahoo symbol hides that button; "Not listed yet" badge and no chart buttons for pre-IPO rows; Watchlist pill treats 10–20 as good; Coinglass + Heatmap buttons (crypto only) with optional per-asset `coinglass_url`; `coinglass` source; Anikait's liquidation fields on the form and cards; "Timeframes I checked" chips (writes `timeframes`, first one into `timeframe`); lazy "All timeframes" widget grid with enlarge.
+  - Schema (additive, in `supabase/trading_schema.sql`): `trading_assets.coinglass_url`; `trading_observations.timeframes/liq_above/liq_below/stops_note/liq_map_checked`; `trading_settings.seed_assets_v`; the source check constraint is dropped and re-added under the same name. No dashboard-view changes.
+  - **How existing accounts get new assets:** on sign-in, defaults with `since` greater than the account's `seed_assets_v` are inserted if the symbol is missing (`SEED.ASSETS_VERSION` in `seed.js`). Nothing existing is edited, and an asset you deleted is never put back. `seed_assets_v` is null on accounts from before round 2; they count as version 1 if they have assets.
+  - **Free TradingView widget limits (tested 24 Oct 2026 in a real browser):** 15m, 30m, 1h, 4h, 1D, 1W, 1M work. 8h (`480`) and 12h (`720`) are not accepted; the widget silently shows 1D. The grid shows a 4h tile for them, with the note "(4h shown, 8h and 12h not available in the free widget)". Any `range` forces daily candles, so 1Y = interval D + `range: "12M"`.
+  - Symbols checked 24 Oct 2026: Yahoo `TSLA`, `SPCX`, `^DJI` load; Yahoo has no `HYPE-USD`, the working id is `HYPE32196-USD`. TradingView `NASDAQ:TSLA`, `NASDAQ:SPCX`, `TVC:DJI`, `CRYPTOCAP:BTC.D` exist; HYPE uses `COINBASE:HYPEUSD` (loads in the widget; `PYTH:HYPEUSD` also exists).
+  - Timeframe chip list is a constant in `app.js` (`TIMEFRAMES`) until Settings (phase 4) makes it editable.
+- **Phase 3 done, awaiting your test:** Learn has a new "Phase 0 · Start here (from Anikait)" at the top (12 rows); a "Words I don't understand" card above it (quick-add word + where heard, notes, Asked Anikait, Understood, Promote to concept, remove); a ＋ Word button in the header that works from every tab.
+  - Schema (additive): new table `trading_glossary` (RLS "own rows"; unique per user + lower(term)); `trading_settings.seed_concepts_v`. No dashboard-view changes (`concepts_total` rises by 9 because of the new rows).
+  - **Existing accounts:** on sign-in, `SEED.CONCEPTS_VERSION` (2) vs the account's `seed_concepts_v` (null counts as 1 if the account has concepts or assets). Below 2 it (a) moves "Support & resistance", "Long vs short" and "Leverage, margin & liquidation" to Phase 0 by title, changing only `phase` and `sort`, and (b) inserts the 9 new Phase 0 rows if the title is missing. Then it records version 2, so anything you delete later stays deleted. New accounts get the full list.
+  - Phase 0 has one "Long vs short" row (covers Long and Short) and one "Leverage, margin & liquidation" row (covers Leverage and Margin and liquidation), because those are the moved rows. "Flags" is used as spelled "flags" (chart pattern), unconfirmed with you. The existing phase 4 "Stop losses & risk/reward" stays; Phase 0 adds "Stop losses: your exit, and other people's".
+  - Promote to concept: adds a Phase 0 row (notes carried; Understood becomes learned) and removes the word from the words list.
+  - Phase 4's Export and "Reset to day one" must include `trading_glossary` and clear `seed_concepts_v` as well as `seed_assets_v`.
+- **Progress calendar (between phase 2 and 3), done, awaiting your test:** "Days checked" card above the Overview / Journal / History sub-tabs (30-day wrapping grid, works at phone width). Shared asset filter (calendar select, History dropdown, heatmap row label all change both); header reads "TSLA · 12 of 30 days"; click a day to filter the current sub-tab (click again or ✕ clears); today outlined; dot = guess ready to grade. Overview stats follow the filters except streak / challenge day (always all assets). "Ready to grade" moved to a checkbox in History. No month arrows (skipped; the grid is deliberately the last 30 days). No schema change.
+- **Phase 3 review fixes:** phase cards read "Phase N · title" and are collapsible; Phase 0 open by default, others closed, state remembered in this browser only (localStorage `tj:phaseN`).
+- Phase 3 review was tested with a fake Supabase client in headless Chromium (not the real project): moved rows keep ticks and notes, 9 rows inserted, deleted seeded concept stays deleted after reload, concept ticks/notes and glossary asked/understood/notes persist, ＋ Word from another tab, promote.
+- **Phase 4 (Settings ⚙) built, awaiting your test.** Theme Light/Dark/System (saved to `trading_settings.theme` and localStorage; `index.html` sets `data-theme` before first paint; TradingView widgets follow it); Defaults (starting balance moved here from Practice trades, home currency, risk %, fee %, funding %); **Edit timeframe chips** (Today chips and the All-timeframes grid read the list; custom forms like `2h` map to widget intervals, unsupported ones show the nearest tile); Export (date range + shortcuts, one .zip with CSV+JSON per table, `screenshots/`, `README.txt`; a screenshot that can't be downloaded is skipped and listed in the README; progress line "Adding screenshots 12 of 43"); single-item ⬇ Download on observation and trade cards; Reset to day one; Account + Sign out.
+  - **Schema (additive; run `supabase/trading_schema.sql` before using the app):** `trading_settings.theme/home_currency/risk_pct/fee_pct/funding_pct_8h/timeframe_chips`; the theme check constraint is dropped and re-added under the same name. No view changes.
+  - **Reset to day one:** shows counts first; needs `RESET` typed; deletes (in order) observations, journal, words, practice trades, concepts, assets (each filtered `user_id = auth.uid()`), then every file under `<your user id>/` in `trading-screenshots`, then sets `seed_assets_v` and `seed_concepts_v` to null and reloads, which re-seeds. Keeps your account, theme, defaults, chips and starting balance (the practice balance is starting balance + closed-trade P&L, so deleting the trades returns it to the starting balance). If a step fails, the message names it with what was already removed and the button becomes "Resume reset" (steps already finished are skipped; file listing is re-read, so leftovers are caught).
+  - Phase 5 must keep the ⬇ Download buttons on trade cards and read `risk_pct`, `fee_pct`, `funding_pct_8h`, `home_currency` from settings; any new `trading_` table must be added to `RESET_STEPS` and to the export table list in `app.js`.
+  - **`index.html` was read-only (mode 444) during this session**; see the end-of-session note about the two lines it needs (theme script, JSZip tag).
+- Phase 5 (Practice trades upgrade): not started. Phase order changed: Settings is 4, Practice trades is 5.
+- Phase 4 notes: "Reset to day one" must also clear `trading_settings.seed_assets_v` (set null) and `seed_concepts_v` (set null) so the re-seed starts clean, and delete `trading_glossary` rows; the Settings page takes over the timeframe chip list and the starting balance.
+- Phase 1 and 2 SQL were tested as in-place upgrades over the previous schema (with existing data) on Postgres 15; run `supabase/trading_schema.sql` in the real project before using the new app (safe to re-run). Until it is run, the app shows "Tables are missing or out of date".
+
+## Done (prompt 01: move onto the shared PersonalOS database)
+- Everything renamed to `trading_` / `trading-` (tables, indexes, bucket, storage policies); all `sb.from()` / `sb.storage.from()` calls updated.
+- SQL moved to `supabase/trading_schema.sql` (idempotent; tested twice in a row on Postgres 15 with Supabase-style stubs); old `schema.sql` is a pointer.
+- `trading_dashboard_daily` and `trading_dashboard_now` published per `../../docs/CONTRACT.md`; documented in `DATA_CONTRACT.md`. Tested on sample data, including RLS isolation between two users, and `../supabase/checks.sql` returns nothing wrong.
+- Secrets: `config.js` gitignored, `config.example.js` added, setup screen shown when `config.js` is missing or has placeholders.
+- `start.sh` / `start.bat` fail with a message if port 5173 is taken (no browser opened).
+- Docs: app `CLAUDE.md`, `DATA_CONTRACT.md`, `README.md`.
+
+## Planned: TaskFlow reset hook (`../../docs/prompts/07-reset-hook.md`)
+**Status:** not started. **Blocked until:** TaskFlow phase 5 has created `taskflow_end_reset` (`../../taskflow/docs/BUILD_PLAN.md`). Can be done any time after that; independent of round 2's remaining phases (3 Learn, 4 Settings, 5 Practice trades).
+- When a TaskFlow nap/reset is running and I **start work here**, the reset ends at that moment and chart-journal shows a popup — *"Reset ended at 4:12 pm — nap 1h 05m, reset 42m. Recorded."* — with an "Open TaskFlow" link.
+- **Start moments** (confirm in the plan step): starting an observation / chart timer on an asset, opening a practice trade, starting a Learn lesson. Opening the app, switching tabs, Settings and the watchlist are **not** starts.
+- `endTaskflowReset(detail)` in `app.js`: `sb.rpc('taskflow_end_reset', { p_app: 'trading', p_detail, p_at })`, fire-and-forget (≈3 s timeout, never blocks or throws into the UI). Popup uses the app's existing toast/modal style. Optional `TASKFLOW_URL` in `config.js` for the link.
+- If TaskFlow isn't set up or the call fails, the app behaves exactly as before.
+- Docs: a line in `CLAUDE.md` that new start moments must call the hook; a "Shared calls" note in `docs/DATA_CONTRACT.md`; a line in `../../docs/DECISIONS.md`.
+
+## Not verified yet (needs the real Supabase project)
+- Sign up, seeding, saving an observation with a screenshot, and querying both views in the real SQL Editor.
+- `start.bat` (Windows) was written but not run.
+
+## Next
+- Run `../docs/prompts/03-verify-integration.md` after the DSA sync work.
+- Dashboard (`../docs/prompts/04-dashboard.md`) adds these two views to its unions.
+- After TaskFlow phase 5: the TaskFlow reset hook above.

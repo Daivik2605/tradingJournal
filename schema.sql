@@ -1,0 +1,1 @@
+-- Moved: the schema now lives in supabase/trading_schema.sql (tables are trading_*). Run that file instead.

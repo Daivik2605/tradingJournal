@@ -1,0 +1,4 @@
+# Secrets and local files
+config.js
+.DS_Store
+.claude/settings.local.json
